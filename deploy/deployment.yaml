@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    run: k8s-sqs-hpa-controller
+  name: k8s-sqs-hpa-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: k8s-sqs-hpa-controller
+  template:
+    metadata:
+      labels:
+        run: k8s-sqs-hpa-controller
+    spec:
+      serviceAccountName: k8s-sqs-hpa-controller
+      containers:
+      - image: rossy4613/k8s-sqs-hpa-controller:0.0.1
+        name: k8s-sqs-hpa-controller
+        command:
+          - run
+        args:
+          - --poll-interval=10s
+          - --target='{"queue-url":"sample1", "hpa-name":"hpa1","namespace":"default"}'
+          - --target='{"queue-url":"sample2", "hpa-name":"hpa2","namespace":"default"}'
+        env:
+          - name: AWS_REGION
+            value: ap-northeast-1
+          - name: AWS_ACCESS_KEY_ID
+            value: <your_key>
+          - name: AWS_SECRET_KEY
+            value: <your_secret>
+        resources:
+          requests:
+            memory: "100"
+            cpu: "100m"
+          limits:
+            memory: "100"
+            cpu: "100m"
