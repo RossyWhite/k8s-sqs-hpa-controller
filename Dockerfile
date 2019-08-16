@@ -11,5 +11,4 @@ RUN mkdir -p /usr/src/app \
 
 WORKDIR /usr/src/app
 COPY --from=builder /tmp/build/k8s-sqs-hpa-controller ./
-COPY ./entrypoint.sh ./
-ENTRYPOINT ["/usr/src/app/entrypoint.sh"]
+ENTRYPOINT ["/usr/src/app/k8s-sqs-hpa-controller"]

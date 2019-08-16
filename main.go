@@ -5,13 +5,14 @@ import (
 	"flag"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/pkg/errors"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/typed/autoscaling/v1"
-	"k8s.io/client-go/rest"
 	"log"
 	"strconv"
 	"sync"
@@ -43,6 +44,7 @@ func (ts *Targets) Set(value string) error {
 var (
 	pollInterval time.Duration
 	targets      Targets
+	min          int
 )
 
 func GetSQSMessageNum(s *sqs.SQS, u string) (int32, error) {
@@ -85,6 +87,7 @@ func UpdateHpaMinReplicas(hpaCli v1.HorizontalPodAutoscalerInterface, hpaName st
 
 func main() {
 	flag.DurationVar(&pollInterval, "poll-interval", 10*time.Second, "Interval to get attributes from SQS")
+	flag.IntVar(&min, "min-hpa", 1, "minimum number of pods")
 	flag.Var(&targets, "target", "target")
 	flag.Parse()
 
@@ -113,6 +116,7 @@ func main() {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
+					log.Printf("Check start: %s", t.HPAName)
 					mNum, err := GetSQSMessageNum(sqsClient, t.QueueURL)
 					if err != nil {
 						log.Fatalln(errors.Wrap(err, "get SQS message failed"))
@@ -124,11 +128,21 @@ func main() {
 						log.Fatalln(errors.Wrap(err, "get HPA current minReplicas failed"))
 					}
 
+					log.Printf("queue_length: %d, currentmin_replicas: %d", mNum, rNum)
+
 					if mNum != rNum {
-						err = UpdateHpaMinReplicas(hpaClient, t.HPAName, &mNum)
+						var n int32
+						min := int32(min)
+						if mNum >= min {
+							n = mNum
+						} else {
+							n = min
+						}
+						err = UpdateHpaMinReplicas(hpaClient, t.HPAName, &n)
 						if err != nil {
 							log.Fatalln(errors.Wrap(err, "update HPA minReplicas failed"))
 						}
+						log.Printf("update HPA success: %d", n)
 					}
 				}()
 			}
@@ -136,4 +150,3 @@ func main() {
 		}
 	}
 }
-
